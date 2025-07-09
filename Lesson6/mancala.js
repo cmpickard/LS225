@@ -162,9 +162,14 @@ class Board {
     return playAgain;
   }
 
-  clearLastStones(player) {
-    player.PITNUMS.forEach(idx => {
-      player.trough += this.pits[idx].stones;
+  clearLastStones(human, computer) {
+    human.PITNUMS.forEach(idx => {
+      this.pits[6].stones += this.pits[idx].stones;
+      this.pits[idx].stones = 0;
+    });
+
+    computer.PITNUMS.forEach(idx => {
+      this.pits[12].stones += this.pits[idx].stones;
       this.pits[idx].stones = 0;
     });
   }
@@ -205,9 +210,8 @@ class Board {
 }
 
 class Player {
-  constructor(trough) {
+  constructor() {
     this.points = 0;
-    this.trough = trough;
   }
 
   hasStones(board) {
@@ -218,8 +222,8 @@ class Player {
 }
 
 class Human extends Player {
-  constructor(trough) {
-    super(trough);
+  constructor() {
+    super();
     this.name = 'Human';
     this.PITNUMS = [1, 2, 3, 4, 5, 6];
   }
@@ -231,6 +235,9 @@ class Human extends Player {
       let ans;
       console.log('Which pit would you like to play from?');
       while (!ans) {
+        board.display();
+        // this next line is returning true when it should return false
+        console.log(this.hasStones(board));
         if (test) {
           ans = Math.floor(1 + (Math.random() * 6));
           console.log(`Human selects pit number ${ans - 1}`);
@@ -244,21 +251,21 @@ class Human extends Player {
           console.log('Not a valid selection!');
         } else if (board.pits[ans - 1].stones === 0) {
           console.log("That pit's empty. Select a pit with at least one stone");
+        } else {
+          play = board.moveStones(ans - 1, 'computer');
+          if (play) {
+            console.log('You get to play again!');
+            board.display();
+          }
         }
-      }
-
-      play = board.moveStones(ans - 1, 'computer');
-      if (play) {
-        console.log('You get to play again!');
-        board.display();
       }
     }
   }
 }
 
 class Computer extends Player {
-  constructor(trough) {
-    super(trough);
+  constructor() {
+    super();
     this.name = 'Computer';
     this.PITNUMS = [7, 8, 9, 10, 11, 12];
   }
@@ -280,15 +287,17 @@ class Computer extends Player {
 class Mancala {
   constructor() {
     this.board = new Board();
-    this.human = new Human(this.board.pits[6]);
-    this.computer = new Computer(this.board.pits[13]);
+    this.human = new Human();
+    this.computer = new Computer();
   }
 
   // START HERE:
   // The display gets fucked when stones move into 2 digits on the troughs or
   // in a pit
-  // NEED logic to move all the stones out of the pits for the player who
-  // DIDN'T run out of moves
+  // BUG: human sometimes gets caught in a loop where there's no stones but
+  // we still end up inside the human.takeTurn.
+  // BUG: announceWinner is throwing an error
+  // BUG: Board.moveStones is throwing an error (after Computer.takeTurn?)
 
   play() {
     this.welcome();
@@ -297,7 +306,8 @@ class Mancala {
       this.board.display();
       this.human.takeTurn(this.board, true);
       this.board.display();
-      if (!this.computer.hasStones(this.board)) break;
+      if (!this.computer.hasStones(this.board) ||
+          !this.human.hasStones(this.board)) break;
       this.computer.takeTurn(this.board);
       this.board.display();
     }
@@ -313,10 +323,11 @@ class Mancala {
 
   calcWinner() {
     // move all remaining stones into trough
-    let moreStones = (this.human.hasStones()) ? this.human : this.computer;
-    this.board.clearLastStones(moreStones);
-    let humanPoints = this.human.trough.stones;
-    let computerPoints = this.computer.trough.stones;
+    // let moreStones = (this.human.hasStones(this.board)) ? this.human : this.computer;
+    this.board.clearLastStones(this.human, this.computer);
+    let humanPoints = this.board.pits[6].stones;
+    let computerPoints = this.board.pits[12].stones;
+    this.board.display();
     let winner;
     if (humanPoints === computerPoints) {
       winner = 'No one is';
@@ -330,7 +341,7 @@ class Mancala {
   }
 
   announceWinner(winner, humanPoints, computerPoints) {
-    let ending = (this.human.hasStones()) ? 'the computer' : 'you';
+    let ending = (this.human.hasStones(this.board)) ? 'the computer' : 'you';
     console.log(`The game has ended b/c ${ending} have no moves to make.`);
     console.log(`You scored: ${humanPoints} points`);
     console.log(`The computer scored: ${computerPoints} points`);
