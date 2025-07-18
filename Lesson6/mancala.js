@@ -90,15 +90,14 @@ and then loop back to the beginning
 const prompt = require('readline-sync');
 
 class Pit {
-  constructor(number) {
-    this.num = number;
+  constructor() {
     this.stones = 4;
   }
 }
 
 class Trough extends Pit {
-  constructor(number, owner) {
-    super(number);
+  constructor(owner) {
+    super();
     this.owner = owner;
     this.stones = 0;
   }
@@ -169,7 +168,7 @@ class Board {
     });
 
     computer.PITNUMS.forEach(idx => {
-      this.pits[12].stones += this.pits[idx].stones;
+      this.pits[13].stones += this.pits[idx].stones;
       this.pits[idx].stones = 0;
     });
   }
@@ -187,25 +186,42 @@ class Board {
     console.log();
   }
 
+  formatStones(start, end) {
+    let stones = [];
+    for (let idx = start; idx <= end; idx++) {
+      stones.push(String(this.pits[idx].stones));
+    }
+
+    return stones.map(stone => {
+      return stone.length === 1 ? stone + ' ' : stone;
+    });
+  }
+
   getCompRow() {
+    let stones = this.formatStones(7, 12);
+
     return '|   | |  ' +
-    this.pits[12].stones + '  ||  ' + this.pits[11].stones + '  ||  ' +
-    this.pits[10].stones + '  ||  ' + this.pits[9].stones + '  ||  ' +
-    this.pits[8].stones +  '  ||  ' + this.pits[7].stones +
-    '  | |   |';
+    stones[5] + ' ||  ' + stones[4] + ' ||  ' +
+    stones[3] + ' ||  ' + stones[2] + ' ||  ' +
+    stones[1]  +  ' ||  ' + stones[0] + ' | |   |';
   }
 
   getTroughRow() {
-    return `| ${this.pits[13].stones} |   ___    ___    ___    ` +
-    `___    ___    ___   | ${this.pits[6].stones} |`;
+    let trough1 = String(this.pits[13].stones);
+    let trough2 = String(this.pits[6].stones);
+    trough1 = trough1.length === 1 ? trough1 + ' ' : trough1;
+    trough2 = trough2.length === 1 ? trough2 + ' ' : trough2;
+    return `| ${trough1}|   ___    ___    ___    ` +
+    `___    ___    ___   |${trough2} |`;
   }
 
   getHumanRow() {
+    let stones = this.formatStones(0, 5);
+
     return '|   | |  ' +
-    this.pits[0].stones + '  ||  ' + this.pits[1].stones + '  ||  ' +
-    this.pits[2].stones + '  ||  ' + this.pits[3].stones + '  ||  ' +
-    this.pits[4].stones + '  ||  ' + this.pits[5].stones +
-    '  | |   |';
+    stones[0] + ' ||  ' + stones[1] + ' ||  ' +
+    stones[2] + ' ||  ' + stones[3] + ' ||  ' +
+    stones[4] + ' ||  ' + stones[5] + ' | |   |';
   }
 }
 
@@ -215,9 +231,11 @@ class Player {
   }
 
   hasStones(board) {
-    return this.PITNUMS.some(idx => {
-      return board.pits[idx].stones > 0;
+    let stones = this.PITNUMS.map(idx => {
+      return board.pits[idx].stones;
     });
+
+    return stones.some(stone => stone !== 0);
   }
 }
 
@@ -225,34 +243,34 @@ class Human extends Player {
   constructor() {
     super();
     this.name = 'Human';
-    this.PITNUMS = [1, 2, 3, 4, 5, 6];
+    this.PITNUMS = [0, 1, 2, 3, 4, 5];
   }
 
   takeTurn(board, test = false) {
     let play = true;
-
     while (play) {
       let ans;
+      // board.display();
       console.log('Which pit would you like to play from?');
-      while (!ans) {
-        board.display();
-        // this next line is returning true when it should return false
-        console.log(this.hasStones(board));
+
+      while (ans === undefined) {
         if (test) {
-          ans = Math.floor(1 + (Math.random() * 6));
-          console.log(`Human selects pit number ${ans - 1}`);
+          ans = Math.floor((Math.random() * 6));
+          console.log(`Human selects pit number ${ans}`);
         } else {
           let options = this.PITNUMS.join(', ');
           ans = Number(prompt.question(`Enter ${options} to select a pit\n`));
         }
 
         if (!this.PITNUMS.includes(ans)) {
-          ans = null;
+          ans = undefined;
           console.log('Not a valid selection!');
-        } else if (board.pits[ans - 1].stones === 0) {
+        } else if (board.pits[ans].stones === 0) {
+          ans = undefined;
           console.log("That pit's empty. Select a pit with at least one stone");
         } else {
-          play = board.moveStones(ans - 1, 'computer');
+          play = (board.moveStones(ans, 'computer') && this.hasStones(board));
+
           if (play) {
             console.log('You get to play again!');
             board.display();
@@ -272,14 +290,16 @@ class Computer extends Player {
 
   takeTurn(board) {
     let play = true;
-    while (play) {
+    while (play && this.hasStones(board)) {
       let choices = this.PITNUMS.filter(idx => {
         return board.pits[idx].stones > 0;
       });
 
       let randIdx = Math.floor(Math.random() * choices.length);
-      console.log(`computer has chosen pit ${choices[randIdx]}`);
+      console.log(`The computer has chosen pit ${choices[randIdx]}`);
+      prompt.question('PRESS ENTER');
       play = board.moveStones(choices[randIdx], 'human');
+      board.display();
     }
   }
 }
@@ -291,25 +311,16 @@ class Mancala {
     this.computer = new Computer();
   }
 
-  // START HERE:
-  // The display gets fucked when stones move into 2 digits on the troughs or
-  // in a pit
-  // BUG: human sometimes gets caught in a loop where there's no stones but
-  // we still end up inside the human.takeTurn.
-  // BUG: announceWinner is throwing an error
-  // BUG: Board.moveStones is throwing an error (after Computer.takeTurn?)
-
   play() {
     this.welcome();
+    this.board.display();
     while (this.human.hasStones(this.board) &&
            this.computer.hasStones(this.board)) {
-      this.board.display();
-      this.human.takeTurn(this.board, true);
+      this.human.takeTurn(this.board, false);
       this.board.display();
       if (!this.computer.hasStones(this.board) ||
           !this.human.hasStones(this.board)) break;
       this.computer.takeTurn(this.board);
-      this.board.display();
     }
 
     this.calcWinner();
@@ -322,11 +333,9 @@ class Mancala {
   }
 
   calcWinner() {
-    // move all remaining stones into trough
-    // let moreStones = (this.human.hasStones(this.board)) ? this.human : this.computer;
     this.board.clearLastStones(this.human, this.computer);
     let humanPoints = this.board.pits[6].stones;
-    let computerPoints = this.board.pits[12].stones;
+    let computerPoints = this.board.pits[13].stones;
     this.board.display();
     let winner;
     if (humanPoints === computerPoints) {
